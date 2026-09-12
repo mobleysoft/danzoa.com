@@ -1,0 +1,19 @@
+name = "danzoa-com-worker"
+main = "worker.js"
+compatibility_date = "2026-09-11"
+account_id = "f07be5f84583d0d100b05aeeae56870b"
+
+# Serves the real, tested MVP (../mvp: pirouette rotation-consistency
+# analyzer - independently re-verified 2026-09-11 with node -e assertions
+# on synthetic rotation data). This REPLACES the prior "danzoa-com-worker"
+# script, which was a fabricated stub (a single hardcoded POST endpoint,
+# /api/danzoa/pose-estimation-vector, returning a canned
+# {status:"success", generated:true} response with zero real logic,
+# everything else 404s) already flagged as fake in ventures.json's
+# insight.evidence on 2026-09-11. Deliberately no [[routes]] here - the
+# zone's root/www routes are managed explicitly via the Cloudflare API,
+# not by wrangler, so only the one route being fixed is touched.
+[assets]
+directory = "../mvp"
+binding = "ASSETS"
+run_worker_first = true
