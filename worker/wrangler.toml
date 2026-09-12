@@ -17,3 +17,12 @@ account_id = "f07be5f84583d0d100b05aeeae56870b"
 directory = "../mvp"
 binding = "ASSETS"
 run_worker_first = true
+
+# Lead capture for the registry's own stated next_step ("a named dance
+# instructor/studio to try it, not more building") - lets a real visitor
+# who wants to try this with their studio leave contact info, since the
+# MVP itself has no way to follow up with anyone who lands on it.
+[[d1_databases]]
+binding = "LEADS_DB"
+database_name = "danzoa_com_leads"
+database_id = "54fe52d4-1c85-4b7a-a657-c6f798e28d9b"

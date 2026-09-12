@@ -33,7 +33,40 @@ teacher's eye.</p>
 <canvas id="sample" width="60" height="60" style="display:none"></canvas>
 <pre id="out">Upload a clip and click Analyze.</pre>
 
+<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #2a2030;max-width:420px;">
+  <h2 style="font-size:1.1rem;margin:0 0 0.5rem;">Run a studio? Try this with your students.</h2>
+  <p class="note" style="margin:0 0 0.8rem;">Leave your email and we'll follow up directly -- no mailing list, no spam, just a real reply from a person.</p>
+  <form id="interest-form" style="display:flex;flex-direction:column;gap:0.5rem;">
+    <input type="email" id="interest-email" placeholder="you@studio.com" required
+      style="padding:0.6rem;border-radius:4px;border:1px solid #2a2030;background:#1a1220;color:#eee;">
+    <input type="text" id="interest-studio" placeholder="Studio name (optional)"
+      style="padding:0.6rem;border-radius:4px;border:1px solid #2a2030;background:#1a1220;color:#eee;">
+    <button type="submit" style="width:fit-content;">Request early access</button>
+  </form>
+  <p id="interest-status" class="note" style="margin-top:0.6rem;"></p>
+</div>
+
 <script src="turn-analysis.js"></script>
+<script>
+document.getElementById('interest-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('interest-email').value.trim();
+  const studio_name = document.getElementById('interest-studio').value.trim();
+  const status = document.getElementById('interest-status');
+  status.textContent = 'Sending...';
+  try {
+    const res = await fetch('/api/interest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, studio_name })
+    });
+    const data = await res.json();
+    status.textContent = res.ok ? "Thanks -- we'll be in touch." : (data.error || 'Something went wrong.');
+  } catch (err) {
+    status.textContent = 'Network error -- please try again.';
+  }
+});
+</script>
 <script>
 const fileInput = document.getElementById('vid');
 const video = document.getElementById('v');
