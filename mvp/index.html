@@ -85,8 +85,15 @@ document.getElementById('run').addEventListener('click', async () => {
   if (!video.src) { out.textContent = 'Choose a video file first.'; return; }
   out.textContent = 'Sampling frames...';
   try {
-    const frames = await sampleFrames(video, 60);
-    const result = analyzeRotationFrames(frames, 30);
+    const sampleCount = 60;
+    const frames = await sampleFrames(video, sampleCount);
+    // sampleFrames spaces samples evenly across the clip's real duration,
+    // not at a fixed rate -- the deg/sec conversion needs the actual
+    // sample interval (duration / (sampleCount - 1)), not an assumed 30fps,
+    // or mean/stdDev angular velocity come out scaled wrong for any clip
+    // that isn't ~1.97s long.
+    const effectiveSampleRate = (sampleCount - 1) / video.duration;
+    const result = analyzeRotationFrames(frames, effectiveSampleRate);
     out.textContent = JSON.stringify(result, null, 2);
   } catch (e) {
     out.textContent = 'Error: ' + e.message;
