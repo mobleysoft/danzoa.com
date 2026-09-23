@@ -6,6 +6,54 @@
 // adds basic security headers and sane cache-control on top of static
 // asset serving.
 
+import { EmailMessage } from 'cloudflare:email';
+
+const LEAD_NOTIFY_TO = 'jmobleyworks@gmail.com';
+const LEAD_NOTIFY_FROM = 'noreply@danzoa.com';
+
+// Minimal RFC 2822 plain-text MIME builder - same sovereign send_email
+// binding approach as mailguyai.com's modules/outbound.js (no external
+// SMTP API, no key dependency), trimmed to plain text since a lead
+// notification doesn't need HTML.
+function buildPlainMime({ from, to, subject, text }) {
+  return [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `Date: ${new Date().toUTCString()}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: 7bit`,
+    ``,
+    text
+  ].join('\r\n');
+}
+
+// Best-effort only: a lead is already durably captured in D1 by the time
+// this runs, so a notification failure (Email Routing misconfigured,
+// binding missing, etc.) must never fail the /api/interest response -
+// it just means the lead is only visible via a direct D1 query, same as
+// before this existed.
+async function notifyNewLead(env, { email, studioName, note }) {
+  if (!env.SEND_EMAIL) return;
+  const lines = [`New danzoa.com lead: ${email}`];
+  if (studioName) lines.push(`Studio: ${studioName}`);
+  if (note) lines.push(`Note: ${note}`);
+  const mime = buildPlainMime({
+    from: LEAD_NOTIFY_FROM,
+    to: LEAD_NOTIFY_TO,
+    subject: 'New danzoa.com early-access lead',
+    text: lines.join('\n')
+  });
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(mime));
+      controller.close();
+    }
+  });
+  await env.SEND_EMAIL.send(new EmailMessage(LEAD_NOTIFY_FROM, LEAD_NOTIFY_TO, stream));
+}
+
 function securedHeaders(source, additions = {}) {
   const headers = new Headers(source);
   headers.set('X-Content-Type-Options', 'nosniff');
@@ -55,9 +103,16 @@ async function handleInterest(request, env) {
   const studioName = typeof body?.studio_name === 'string' ? body.studio_name.slice(0, 200) : null;
   const note = typeof body?.note === 'string' ? body.note.slice(0, 1000) : null;
   try {
-    await env.LEADS_DB.prepare(
+    const result = await env.LEADS_DB.prepare(
       'INSERT INTO leads (id, email, studio_name, note, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(email) DO NOTHING'
     ).bind(crypto.randomUUID(), email, studioName, note, new Date().toISOString()).run();
+    if (result.meta?.changes === 1) {
+      try {
+        await notifyNewLead(env, { email, studioName, note });
+      } catch (notifyErr) {
+        console.error('lead notification failed', notifyErr.message);
+      }
+    }
     return jsonResponse({ ok: true }, 201);
   } catch (err) {
     return jsonResponse({ error: err.message }, 500);
