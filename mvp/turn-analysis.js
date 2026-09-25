@@ -16,7 +16,7 @@
  * faked as complete.
  */
 
-function frameCentroidAngle(frame) {
+function frameCentroidInfo(frame) {
   // frame: 2D array of brightness values 0-255 (grayscale).
   const h = frame.length;
   const w = frame[0].length;
@@ -33,7 +33,13 @@ function frameCentroidAngle(frame) {
   if (sumW === 0) return null;
   const cx = sumX / sumW;
   const cy = sumY / sumW;
-  return Math.atan2(cy - cy0, cx - cx0); // radians, -PI..PI
+  const dx = cx - cx0, dy = cy - cy0;
+  return { angle: Math.atan2(dy, dx), radius: Math.hypot(dx, dy), maxRadius: Math.min(w, h) / 2 };
+}
+
+function frameCentroidAngle(frame) {
+  const info = frameCentroidInfo(frame);
+  return info ? info.angle : null;
 }
 
 function unwrap(prev, curr) {
@@ -47,11 +53,27 @@ function analyzeRotationFrames(frames, fps = 30) {
   if (!frames || frames.length < 2) {
     throw new Error('Need at least 2 frames to measure rotation');
   }
-  const angles = frames.map(frameCentroidAngle);
-  if (angles.some(a => a === null)) {
+  const infos = frames.map(frameCentroidInfo);
+  if (infos.some(info => info === null)) {
     throw new Error('One or more frames had zero total brightness -- cannot locate a centroid');
   }
 
+  // Trackability gate: the weighted-centroid approach only works when the
+  // dancer is meaningfully brighter than the background across most of the
+  // frame. Verified 2026-09-25 with synthetic frames that a realistic (not
+  // literally near-black) background silently collapses the centroid to
+  // near the frame's geometric center regardless of real rotation
+  // happening -- the background's total pixel weight swamps the dancer's
+  // even at a 5x brightness ratio -- which previously produced a
+  // confident-looking but meaningless "0 full turns" result instead of
+  // telling the user why. Refuse instead of guessing.
+  const avgRadius = infos.reduce((a, info) => a + info.radius, 0) / infos.length;
+  const maxRadius = infos[0].maxRadius;
+  if (avgRadius < maxRadius * 0.10) {
+    throw new Error('Not enough contrast between the dancer and background to track rotation reliably -- try a clip with the dancer clearly brighter than a darker background.');
+  }
+
+  const angles = infos.map(info => info.angle);
   const deltas = [];
   for (let i = 1; i < angles.length; i++) {
     deltas.push(unwrap(angles[i - 1], angles[i]));
